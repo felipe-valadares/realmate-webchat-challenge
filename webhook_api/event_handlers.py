@@ -3,6 +3,7 @@ from .models import Conversation, Message
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 import uuid
+from django.contrib.auth.models import User
 
 class WebhookEvent:
     """Classe base para todos os eventos de webhook"""
@@ -85,6 +86,7 @@ class NewConversationEvent(WebhookEvent):
     
     def process(self):
         conversation_id = self.data['id']
+        provided_customer_id = self.data.get('customer_id')
         
         # Verificar se é um UUID válido
         try:
@@ -103,11 +105,29 @@ class NewConversationEvent(WebhookEvent):
                 'conversation_id': conversation_id
             })
         
+        # 1) tenta usar o customer_id do payload
+        customer = None
+        if provided_customer_id:
+            try:
+                customer = User.objects.get(id=provided_customer_id)
+            except User.DoesNotExist:
+                customer = None
+
+        # 2) se não veio customer_id, usa o usuário autenticado
+        if not customer and hasattr(self, 'request_user') and \
+           self.request_user and not self.request_user.is_anonymous:
+            customer = self.request_user
+        
         # Criar nova conversa
-        conversation = Conversation.objects.create(id=conversation_id)
+        conversation = Conversation.objects.create(
+            id=conversation_id,
+            customer=customer
+        )
+        
         return {
             'status': 'Conversa criada com sucesso',
-            'conversation_id': str(conversation.id)
+            'conversation_id': str(conversation.id),
+            'customer_id': customer.id if customer else None
         }, status.HTTP_201_CREATED
 
 
@@ -133,7 +153,7 @@ class NewMessageEvent(WebhookEvent):
                 'received': self.data['direction'],
                 'expected': valid_directions
             })
-        
+
         # Validar UUIDs
         for field in ['id', 'conversation_id']:
             try:
@@ -183,6 +203,9 @@ class NewMessageEvent(WebhookEvent):
             content=content,
             timestamp=self.event_time
         )
+        
+        conversation.updated_at = self.event_time
+        conversation.save()
         
         return {
             'status': 'Mensagem adicionada com sucesso',
@@ -245,7 +268,7 @@ class EventFactory:
     """Fábrica para criar instâncias de eventos com base no tipo"""
     
     @staticmethod
-    def create_event(event_type, data, timestamp):
+    def create_event(event_type, data, timestamp, request_user=None):
         if not isinstance(event_type, str):
             raise ValidationError({
                 'error': 'Tipo de evento deve ser uma string',
@@ -279,4 +302,7 @@ class EventFactory:
                 'expected': list(event_map.keys())
             })
         
-        return event_map[event_type](data, timestamp) 
+        # instancia e injeta o usuário autenticado
+        event = event_map[event_type](data, timestamp)
+        setattr(event, 'request_user', request_user)
+        return event 
