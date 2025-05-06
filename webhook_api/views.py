@@ -10,7 +10,7 @@ import json
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
 from rest_framework.authtoken.models import Token
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
 from uuid import uuid4
 from .auth import AuthService, JWTAuthentication
 
@@ -125,14 +125,16 @@ class WebhookView(ErrorHandlerMixin, APIView):
 
 
 class RegisterView(APIView):
+    permission_classes = [AllowAny]
+    
     def post(self, request):
         try:
-            username = request.data.get('username')
-            password = request.data.get('password')
-            email = request.data.get('email')
+            username   = request.data.get('username')
+            password   = request.data.get('password')
+            email      = request.data.get('email')
             first_name = request.data.get('first_name', '')
-            last_name = request.data.get('last_name', '')
-            is_agent = request.data.get('is_agent', False)
+            last_name  = request.data.get('last_name', '')
+            is_agent   = request.data.get('is_agent', False)
             
             if not all([username, password, email]):
                 return Response({
@@ -140,43 +142,38 @@ class RegisterView(APIView):
                     'required': ['username', 'password', 'email']
                 }, status=status.HTTP_400_BAD_REQUEST)
             
-            # Verificar se o usuário já existe
             if User.objects.filter(username=username).exists():
                 return Response({
                     'error': 'Nome de usuário já existe'
                 }, status=status.HTTP_400_BAD_REQUEST)
             
-            # Criar usuário
             user = User.objects.create_user(
-                id=uuid4(),
-                username=username,
-                email=email,
-                password=password,
-                first_name=first_name,
-                last_name=last_name
+                username   = username,
+                email      = email,
+                password   = password,
+                first_name = first_name,
+                last_name  = last_name
             )
             
-            # Criar perfil
             profile = UserProfile.objects.create(
-                user=user,
-                is_agent=is_agent
+                user     = user,
+                is_agent = is_agent
             )
             
-            # Gera o JWT
             token = AuthService.generate_token(user)
             
             return Response({
-                'user': UserSerializer(user).data,
-                'profile': UserProfileSerializer(profile).data,
-                'token': token
+                'user'    : UserSerializer(user).data,
+                'profile' : UserProfileSerializer(profile).data,
+                'token'   : token
             }, status=status.HTTP_201_CREATED)
             
         except Exception as e:
-            return Response({
-                'error': str(e)
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 class LoginView(APIView):
+    permission_classes = [AllowAny]
+    
     def post(self, request):
         username = request.data.get('username')
         password = request.data.get('password')
