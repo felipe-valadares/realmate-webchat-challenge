@@ -17,7 +17,7 @@ export default function Home() {
   return (
     <Container maxW="container.md" py={10}>
       <VStack spacing={8} align="center">
-        <Heading as="h1" size="xl">Sistema de Atendimento WhatsApp</Heading>
+        <Heading as="h1" size="xl">Sistema de Atendimento RealMate</Heading>
         <Text fontSize="lg" textAlign="center">
           Faça login para acessar suas conversas ou registre-se para criar uma nova conta.
         </Text>

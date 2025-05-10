@@ -1,164 +1,218 @@
 # realmate-challenge
 
+## Sumário
+
+- [Introdução](#introdução)  
+- [Recursos](#recursos)  
+- [Tecnologias](#tecnologias)  
+- [Pré-requisitos](#pré-requisitos)  
+- [Instalação](#instalação)  
+  - [Clonar o repositório](#clonar-o-repositório)  
+  - [Configurar o ambiente Python](#configurar-o-ambiente-python)  
+  - [Executar migrações](#executar-migrações)  
+  - [Iniciar o servidor Django](#iniciar-o-servidor-django)  
+- [Endpoints da API](#endpoints-da-api)  
+  - [Registro de usuário](#registro-de-usuário)  
+  - [Login / Autenticação](#login--autenticação)  
+  - [Webhook](#webhook)  
+- [Integração com Frontend](#integração-com-frontend)  
+- [Estrutura do Projeto](#estrutura-do-projeto)  
+- [Contribuição](#contribuição)  
+- [Licença](#licença)  
+
+---
+
 ## Introdução
 
-O objetivo deste desafio é avaliar seus conhecimentos em **APIs** e **Webhooks**, além da sua capacidade de aprender rapidamente e implementar soluções eficientes, usando frameworks renomados como **Django** e **Django Rest Framework (DRF)**.
+`realmate-challenge` é uma API RESTful construída com Django e Django REST Framework para suportar um sistema de atendimento via chat. A aplicação fornece autenticação por JWT, endpoints para registrar usuários, realizar login e receber eventos de webhook de conversas e mensagens.
 
-Você deverá desenvolver uma web API que sincroniza eventos de um sistema de atendimentos no WhatsApp, processando webhooks e registrando as alterações no banco de dados.
+## Recursos
 
-## 🎯 O Desafio
+- Registro de usuários com distinção entre **agentes** e **clientes**  
+- Autenticação via JWT  
+- Recebimento de eventos de **novo bate-papo**, **mensagens enviadas/recebidas** e **fechamento de conversa**  
+- CORS configurado para integração com frontend Next.js  
 
-Desenvolver uma web API utilizando **Django Rest Framework** para receber webhooks de um sistema de atendimento. Esses webhooks contêm eventos relacionados a conversas e mensagens, e devem ser registrados no banco de dados corretamente.
+## Tecnologias
 
-## 📌 Requisitos
+- Python >= 3.13  
+- Django 5.1.6  
+- Django REST Framework 3.16.0  
+- django-cors-headers 4.7.0  
+- PyJWT 2.10.1  
+- SQLite (banco de dados embarcado)  
+- Next.js (frontend, não incluso neste repositório)  
 
-1.	Criar dois modelos principais:
-	- `Conversation`
-	- `Message` (relacionado a uma `Conversation`)
-2.	A API deve:
-	- Receber eventos via POST no endpoint `localhost/webhook/`
-	- Criar instâncias dos modelos correspondentes
-3.	Criar um endpoint GET em `localhost/conversations/{id}` para expor a conversa, incluindo:
-	- Seu estado (`OPEN` ou `CLOSED`)
-	- Suas mensagens
-4.	Lidar com erros de maneira graceful (evitar retornos de erro 500).
-5.	Restrições:
-	- Uma `Conversation` deve ter um estado. Os estados possíveis são: `OPEN` e `CLOSED`
-	- Uma `CLOSED` `Conversation` não pode receber novas mensagens
-	- Uma `Message` deve ter dois tipos: `SENT` e `RECEIVED`
-6.	O banco de dados utilizado deve ser SQLite.
+## Pré-requisitos
 
-## 📦 Formato dos Webhooks
+- Git  
+- Python >= 3.13  
+- Poetry  
+- Node.js >= 16 (para o frontend)  
 
-Os eventos virão no seguinte formato:
+## Instalação
 
-### Novo evento de conversa iniciada
-
-```json
-{
-    "type": "NEW_CONVERSATION",
-    "timestamp": "2025-02-21T10:20:41.349308",
-    "data": {
-        "id": "6a41b347-8d80-4ce9-84ba-7af66f369f6a"
-    }
-}
-```
-
-### Novo evento de mensagem recebida
-
-```json
-{
-    "type": "NEW_MESSAGE",
-    "timestamp": "2025-02-21T10:20:42.349308",
-    "data": {
-        "id": "49108c71-4dca-4af3-9f32-61bc745926e2",
-        "direction": "RECEIVED",
-        "content": "Olá, tudo bem?",
-        "conversation_id": "6a41b347-8d80-4ce9-84ba-7af66f369f6a"
-    }
-}
-```
-
-### Novo evento de mensagem enviada
-
-```json
-{
-    "type": "NEW_MESSAGE",
-    "timestamp": "2025-02-21T10:20:44.349308",
-    "data": {
-        "id": "16b63b04-60de-4257-b1a1-20a5154abc6d",
-        "direction": "SENT",
-        "content": "Tudo ótimo e você?",
-        "conversation_id": "6a41b347-8d80-4ce9-84ba-7af66f369f6a"
-    }
-}
-```
-
-### Novo evento de conversa encerrada
-
-```json
-{
-    "type": "CLOSE_CONVERSATION",
-    "timestamp": "2025-02-21T10:20:45.349308",
-    "data": {
-        "id": "6a41b347-8d80-4ce9-84ba-7af66f369f6a"
-    }
-}
-```
-
-## 📌 Regras de Negócio
-
-- Toda conversa começa no estado “OPEN”
-- Uma conversa no estado “CLOSED” não pode receber novas mensagens
-- As mensagens devem estar associadas a uma conversa existente
-- O ID da mensagem e o ID da conversa devem ser únicos
-- O sistema deve lidar com erros sem retornar HTTP 500
-
-## 🔥 Bônus (Opcional)
-
-Se quiser ir além e demonstrar sua capacidade de aprendizado e desenvolvimento rápido, você pode implementar um frontend simples para visualizar as conversas e mensagens.
-
-## 🚀 Tecnologias e Ferramentas
-
-- Django
-- Django Rest Framework
-- Poetry
-- SQLite
-- GitHub
-
-## 📌 Instruções de Instalação
-
-### Pré-requisitos
-
-- Instalar o Poetry para gerenciamento de dependências:
+### 1. Clonar o repositório
 
 ```bash
+git clone https://github.com/felipe-valadares/realmate-webchat-challenge.git
+cd realmate_challenge
+```
+
+### 2. Configurar o ambiente Python
+
+```bash
+# Instalar o Poetry (se ainda não tiver)
 pip install poetry
-```
 
-### Instalação do Projeto
-
-> [!WARNING]  
-> Siga todas as instruções de instalação do projeto. O descumprimento dos requisitos de instalação acarretará a desclassificação do(a) candidato(a).
-
-1.	Crie um repositório público, utilizando este repositório como template. Para isso, clique sobre o botão "**Use this template**", no canto superio direito desta tela. Forks **não** serão aceitos.
-
-
-
-2.	Instale as dependências do projeto utilizando o Poetry:
-
-```bash
-cd realmate-challenge
+# Instalar dependências
 poetry install
 ```
 
-3.	Aplique as migrações no banco de dados SQLite:
+### 3. Executar migrações
 
 ```bash
-python manage.py migrate
+poetry run python manage.py migrate
 ```
 
-4.	Execute o servidor de desenvolvimento:
+### 4. Iniciar o servidor Django
 
 ```bash
-python manage.py runserver
+poetry run python manage.py runserver
 ```
 
+O backend estará disponível em `http://localhost:8000`.
 
-## 📌 Entrega e Requisitos
+---
 
-Após concluir o desafio, envie o link do repositório para o e-mail tecnologia@realmate.com.br com seu nome e número do WhatsApp informados no e-mail.
+## Endpoints da API
 
-## 📚 Referências
+> **Obs.:** A app Django foi configurada com `APPEND_SLASH = False`. URLs devem ser chamadas exatamente com ou sem barra final, conforme descrito.
 
-- [Django Rest Framework](https://www.django-rest-framework.org/)
-- [Django](https://www.djangoproject.com/)
-- [Poetry](https://python-poetry.org/)
+### 1. Registro de usuário
 
-## 📧 Dúvidas
+POST `/register/`  
+Registra usuário (cliente ou agente).
 
-Caso tenha dúvidas sobre o desafio, entre em contato com nossa equipe de tecnologia no e-mail tecnologia@realmate.com.br.
+```bash
+curl -X POST http://localhost:8000/register/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "teste",
+    "password": "teste",
+    "email": "teste@teste.com",
+    "is_agent": false
+  }'
+```
 
-Boa sorte! 🚀
+### 2. Login / Autenticação
 
-_Equipe Realmate_
+POST `/login/`  
+Retorna token JWT.
+
+```bash
+curl -X POST http://localhost:8000/login/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "teste",
+    "password": "teste"
+  }'
+```
+
+### 3. Webhook
+
+POST `/webhook/`  
+Recebe eventos de chat. Requer header `Authorization: Bearer <token>`.
+
+#### 3.1 Novo evento de conversa
+
+```bash
+curl -X POST http://localhost:8000/webhook/ \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
+  -d '{
+    "type": "NEW_CONVERSATION",
+    "timestamp": "2025-02-21T10:20:41.349308",
+    "data": {
+      "id": "6a41b347-8d80-4ce9-84ba-7af66f369f6a"
+    }
+  }'
+```
+
+#### 3.2 Nova mensagem (enviada ou recebida)
+
+```bash
+curl -X POST http://localhost:8000/webhook/ \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
+  -d '{
+    "type": "NEW_MESSAGE",
+    "timestamp": "2025-02-21T10:20:44.349308",
+    "data": {
+      "id": "16b63b04-60de-4257-b1a1-20a5154abc6d",
+      "direction": "SENT",         # ou "RECEIVED"
+      "content": "Tudo ótimo e você?",
+      "conversation_id": "6a41b347-8d80-4ce9-84ba-7af66f369f6a"
+    }
+  }'
+```
+
+#### 3.3 Fechamento de conversa
+
+```bash
+curl -X POST http://localhost:8000/webhook/ \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
+  -d '{
+    "type": "CLOSE_CONVERSATION",
+    "timestamp": "2025-02-21T10:25:00.000000",
+    "data": {
+      "conversation_id": "6a41b347-8d80-4ce9-84ba-7af66f369f6a"
+    }
+  }'
+```
+
+---
+
+## Integração com Frontend
+
+O frontend em Next.js (não incluído neste repositório) pode ser iniciado assim:
+
+```bash
+cd realmate_challenge/frontend
+npm install
+npm run dev
+```
+
+Acesse `http://localhost:3000`.
+
+---
+
+## Estrutura do Projeto
+
+```
+realmate_challenge/
+├── webhook_api/           # App principal (views, models, serializers, middleware)
+├── realmate_challenge/    # Configurações do Django (settings, urls, wsgi)
+├── frontend/              # (Opcional) cliente Next.js
+├── db.sqlite3             # Banco de dados SQLite
+├── README.md              # Documentação do projeto
+├── pyproject.toml         # Dependências e configuração Poetry
+└── poetry.lock            # Lockfile gerado pelo Poetry
+```
+
+---
+
+## Contribuição
+
+1. Fork este repositório  
+2. Crie uma branch feature: `git checkout -b feature/nova-funcionalidade`  
+3. Commit suas alterações: `git commit -m "Descrição da mudança"`  
+4. Push para a branch: `git push origin feature/nova-funcionalidade`  
+5. Abra um Pull Request  
+
+---
+
+## Licença
+
+Este projeto está sob a licença MIT. Consulte o arquivo `LICENSE` para detalhes.  
