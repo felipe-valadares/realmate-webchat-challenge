@@ -111,10 +111,31 @@ class WebhookView(ErrorHandlerMixin, APIView):
             if payload['type'] == 'NEW_CONVERSATION':
                 data['customer_id'] = request.token_user_id
 
-            # Criar e processar o evento, agora passando o usuário
+            # Processar eventos de NEW_MESSAGE de forma assíncrona, apenas se conversa aberta
+            if event_type == 'NEW_MESSAGE':
+                # Verificar se a conversa existe
+                conversation_id = data.get('conversation_id')
+                try:
+                    convo = Conversation.objects.get(id=conversation_id)
+                except Conversation.DoesNotExist:
+                    return Response({
+                        'error': 'Conversa não encontrada',
+                        'conversation_id': conversation_id
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                # Somente aceitar se estiver aberta
+                if convo.status == Conversation.CLOSED:
+                    return Response({
+                        'error': 'Não é possível adicionar mensagens a uma conversa fechada',
+                        'conversation_id': conversation_id,
+                        'conversation_status': convo.status
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                # Agendar processamento com Celery
+                from .tasks import handle_new_message_event
+                handle_new_message_event.delay(data, timestamp, request.user.id)
+                return Response({'status': 'Mensagem recebida'}, status=status.HTTP_202_ACCEPTED)
+            # Para outros eventos, processar sincronicamente
             event = EventFactory.create_event(event_type, data, timestamp, request.user)
             response_data, status_code = event.process()
-            
             return Response(response_data, status=status_code)
             
         except json.JSONDecodeError:
@@ -136,10 +157,12 @@ class RegisterView(APIView):
             last_name  = request.data.get('last_name', '')
             is_agent   = request.data.get('is_agent', False)
             
-            if not all([username, password, email]):
+            # Validação de campos obrigatórios
+            missing = [f for f in ['username', 'password', 'email'] if not request.data.get(f)]
+            if missing:
                 return Response({
                     'error': 'Campos obrigatórios ausentes',
-                    'required': ['username', 'password', 'email']
+                    'missing_fields': missing
                 }, status=status.HTTP_400_BAD_REQUEST)
             
             if User.objects.filter(username=username).exists():
@@ -175,13 +198,15 @@ class LoginView(APIView):
     permission_classes = [AllowAny]
     
     def post(self, request):
+        # Validação de campos obrigatórios
+        missing = [f for f in ['username', 'password'] if not request.data.get(f)]
+        if missing:
+            return Response({
+                'error': 'Credenciais incompletas',
+                'missing_fields': missing
+            }, status=status.HTTP_400_BAD_REQUEST)
         username = request.data.get('username')
         password = request.data.get('password')
-        
-        if not all([username, password]):
-            return Response({
-                'error': 'Credenciais incompletas'
-            }, status=status.HTTP_400_BAD_REQUEST)
         
         user = authenticate(username=username, password=password)
         
@@ -204,12 +229,20 @@ class UserConversationsView(APIView):
     
     def get(self, request):
         user = request.user
-        profile = user.profile
-        
+        # Serializar cada conversa incluindo apenas mensagens INBOUND
         conversations = Conversation.objects.filter(customer_id=user.id)
-        
-        serializer = ConversationSerializer(conversations, many=True)
-        return Response(serializer.data)
+        user_data = UserSerializer(user).data
+        result = []
+        for conv in conversations:
+            conv_data = ConversationSerializer(conv).data
+            # Filtrar mensagens INBOUND
+            inbound_msgs = [m for m in conv_data.get('messages', []) if m.get('type') == 'INBOUND']
+            # Preencher author com base no token (usuário autenticado)
+            for msg in inbound_msgs:
+                msg['author'] = user_data
+            conv_data['messages'] = inbound_msgs
+            result.append(conv_data)
+        return Response(result)
 
 class ConversationDetailView(ErrorHandlerMixin, APIView):
     authentication_classes = [JWTAuthentication]
@@ -235,12 +268,16 @@ class AssignAgentView(APIView):
     def post(self, request, conversation_id):
         try:
             conversation = get_object_or_404(Conversation, id=conversation_id)
-            agent_id = request.data.get('agent_id')
-            
-            if not agent_id:
+            # Validação de campos obrigatórios
+            missing = []
+            if 'agent_id' not in request.data:
+                missing.append('agent_id')
+            if missing:
                 return Response({
-                    'error': 'ID do agente não fornecido'
+                    'error': 'Campos obrigatórios ausentes',
+                    'missing_fields': missing
                 }, status=status.HTTP_400_BAD_REQUEST)
+            agent_id = request.data.get('agent_id')
             
             # Verificar se o agente existe e é um agente
             try:

@@ -33,20 +33,27 @@ class Conversation(models.Model):
         return f"Conversa {self.id} - {self.status}"
 
 class Message(models.Model):
-    SENT = 'SENT'
-    RECEIVED = 'RECEIVED'
-    
+    # Tipos de mensagem: INBOUND (recebida pelo webhook) e OUTBOUND (gerada internamente)
+    INBOUND = 'INBOUND'
+    OUTBOUND = 'OUTBOUND'
     DIRECTION_CHOICES = [
-        (SENT, 'Sent'),
-        (RECEIVED, 'Received'),
+        (INBOUND, 'Inbound'),
+        (OUTBOUND, 'Outbound'),
     ]
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='messages')
+    # Autor da mensagem: cliente ou agente
+    author = models.ForeignKey(
+        'auth.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='messages'
+    )
     direction = models.CharField(max_length=10, choices=DIRECTION_CHOICES)
     content = models.TextField()
     timestamp = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
     
+    class Meta:
+        ordering = ['timestamp']
+
     def __str__(self):
         return f"Mensagem {self.id} - {self.direction}" 

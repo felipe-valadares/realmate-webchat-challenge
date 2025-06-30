@@ -15,9 +15,11 @@ class UserProfileSerializer(serializers.ModelSerializer):
         fields = ['user', 'is_agent']
 
 class MessageSerializer(serializers.ModelSerializer):
+    type = serializers.CharField(source='direction')
+    author = UserSerializer(read_only=True)
     class Meta:
         model = Message
-        fields = ['id', 'direction', 'content', 'timestamp']
+        fields = ['id', 'type', 'content', 'timestamp', 'author']
 
 class ConversationSerializer(serializers.ModelSerializer):
     messages = MessageSerializer(many=True, read_only=True)

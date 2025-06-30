@@ -16,13 +16,17 @@ class WebhookEvent:
     def __init__(self, data, timestamp):
         self.data = data
         self.timestamp = timestamp
+        # Normalizar timestamps terminando com 'Z' para ISO 8601 compatível
+        ts = timestamp
+        if isinstance(ts, str) and ts.endswith('Z'):
+            ts = ts[:-1]
         try:
-            self.event_time = datetime.fromisoformat(timestamp)
+            self.event_time = datetime.fromisoformat(ts)
         except ValueError:
             raise ValidationError({
                 'error': 'Formato de timestamp inválido',
                 'received': timestamp,
-                'expected': 'ISO 8601 (YYYY-MM-DDThh:mm:ss.ssssss)'
+                'expected': 'ISO 8601 (YYYY-MM-DDThh:mm:ss[.ssss][Z])'
             })
         self.validate_data()
     
@@ -133,41 +137,29 @@ class NewConversationEvent(WebhookEvent):
 
 class NewMessageEvent(WebhookEvent):
     """Processa eventos de nova mensagem"""
-    
-    required_fields = ['id', 'direction', 'content', 'conversation_id']
+    # Apenas campos essenciais: id, content e conversation_id
+    required_fields = ['id', 'content', 'conversation_id']
     field_types = {
         'id': str,  # UUID como string
-        'direction': str,
         'content': str,
         'conversation_id': str  # UUID como string
     }
-    
+
     def validate_data(self):
         super().validate_data()
-        
-        # Validar o tipo de direção
-        valid_directions = [Message.SENT, Message.RECEIVED]
-        if self.data['direction'] not in valid_directions:
-            raise ValidationError({
-                'error': 'Direção da mensagem inválida',
-                'received': self.data['direction'],
-                'expected': valid_directions
-            })
-
-        # Validar UUIDs
+        # Validar formato UUID para id e conversation_id
         for field in ['id', 'conversation_id']:
             try:
                 uuid.UUID(str(self.data[field]))
-            except ValueError:
+            except (ValueError, TypeError):
                 raise ValidationError({
                     'error': f'Campo {field} deve ser um UUID válido',
-                    'received': self.data[field],
+                    'received': self.data.get(field),
                     'expected': 'UUID válido'
                 })
-    
+
     def process(self):
         message_id = self.data['id']
-        direction = self.data['direction']
         content = self.data['content']
         conversation_id = self.data['conversation_id']
         
@@ -195,13 +187,14 @@ class NewMessageEvent(WebhookEvent):
                 'conversation_status': conversation.status
             })
         
-        # Criar nova mensagem
+        # Criar nova mensagem INBOUND
         message = Message.objects.create(
             id=message_id,
             conversation=conversation,
-            direction=direction,
+            direction=Message.INBOUND,
             content=content,
-            timestamp=self.event_time
+            timestamp=self.event_time,
+            author=self.request_user
         )
         
         conversation.updated_at = self.event_time
