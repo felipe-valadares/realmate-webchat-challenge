@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useLayoutEffect } from 'react';
 import { useRouter } from 'next/router';
 import {
   Box, Heading, Text, VStack, HStack, Badge, Flex, Spacer,
@@ -6,18 +6,34 @@ import {
 } from '@chakra-ui/react';
 import api from '../services/api';
 import { v4 as uuidv4 } from 'uuid';
+
 export default function ConversationDetail({ conversationId }) {
+  const currentUser = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('user')) : null;
   const [conversation, setConversation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [newMessage, setNewMessage] = useState('');
   const router = useRouter();
   const toast = useToast();
+  const [pendingMessages, setPendingMessages] = useState([]);
+  const [messageStatuses, setMessageStatuses] = useState({});
+  const containerRef = useRef(null);
+  // Flag para rolagem inicial ao bottom
+  const didInitialScroll = useRef(false);
+  // Flag para indicar se o usuário está no fim da lista de mensagens
+  const isAtBottomRef = useRef(true);
+  // Handler para atualizar flag quando o usuário rolar a lista
+  const handleScroll = () => {
+    const el = containerRef.current;
+    if (!el) return;
+    isAtBottomRef.current = (el.scrollHeight - el.scrollTop) <= (el.clientHeight + 5);
+  };
 
   useEffect(() => {
     const fetchConversation = async () => {
       try {
         const response = await api.get(`/conversations/${conversationId}/`);
         setConversation(response.data);
+        setPendingMessages([]);
       } catch (error) {
         toast({
           title: 'Erro',
@@ -37,22 +53,62 @@ export default function ConversationDetail({ conversationId }) {
     }
   }, [conversationId, router, toast]);
 
+  useEffect(() => {
+    if (!conversationId) return;
+    // Conectar no WebSocket do backend (porta 8000)
+    const wsUrl = `ws://${window.location.hostname}:8000/ws/conversations/${conversationId}/`;
+    const ws = new WebSocket(wsUrl);
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      setPendingMessages(prev => prev.filter(m => m.id !== data.id));
+      setMessageStatuses(prev => ({ ...prev, [data.id]: 'processed' }));
+      setConversation(prev => ({
+        ...prev,
+        messages: [...prev.messages, data]
+      }));
+    };
+    return () => ws.close();
+  }, [conversationId]);
+
+  // Rola até o bottom na primeira renderização dos messages
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el || didInitialScroll.current) return;
+    el.scrollTop = el.scrollHeight;
+    didInitialScroll.current = true;
+  }, [conversation?.messages?.length]);
+
+  // Auto-scroll: se o usuário estiver no fim, mover para bottom após nova mensagem
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    // Se estava no fim, rolar para exibir nova mensagem
+    if (isAtBottomRef.current) {
+      requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight;
+      });
+    }
+  }, [conversation?.messages?.length, pendingMessages.length]);
+
   const handleSendMessage = async () => {
     if (!newMessage.trim()) return;
 
+    const messageId = uuidv4();
+    const timestamp = new Date().toISOString();
     try {
       const sendMessagePayload = {
         type: 'NEW_MESSAGE',
-        timestamp: new Date().toISOString(),
+        timestamp,
         data: {
-          "id": uuidv4(),
-          "direction": "SENT",
-          "content": newMessage,
-          "conversation_id": conversationId,
+          id: messageId,
+          content: newMessage,
+          conversation_id: conversationId,
         }
       };
       console.log(sendMessagePayload);
       await api.post(`/webhook/`, sendMessagePayload);
+      setPendingMessages(prev => [...prev, { id: messageId, type: 'INBOUND', content: newMessage, timestamp }]);
+      setMessageStatuses(prev => ({ ...prev, [messageId]: 'pending' }));
       toast({
         title: 'Mensagem enviada',
         description: 'Sua mensagem foi enviada com sucesso',
@@ -61,10 +117,6 @@ export default function ConversationDetail({ conversationId }) {
         isClosable: true,
       });
       setNewMessage('');
-      
-      // Recarregar a conversa para ver a nova mensagem
-      const response = await api.get(`/conversations/${conversationId}/`);
-      setConversation(response.data);
     } catch (error) {
       toast({
         title: 'Erro',
@@ -94,7 +146,6 @@ export default function ConversationDetail({ conversationId }) {
 
       await api.post(`/webhook/`, closeConversationPayload);
 
-      // Atualiza o status local da conversa para "CLOSED"
       setConversation(prev => ({
         ...prev,
         status: 'CLOSED'
@@ -143,25 +194,59 @@ export default function ConversationDetail({ conversationId }) {
         height="60vh" 
         overflowY="auto"
         mb={4}
-        
+        ref={containerRef}
+        onScroll={handleScroll}
       >
-        {conversation.messages.length === 0 ? (
+        {conversation.messages.length === 0 && pendingMessages.length === 0 ? (
           <Text>Nenhuma mensagem nesta conversa</Text>
         ) : (
           <VStack spacing={4} align="stretch">
-            {conversation.messages.map((message) => (
-              <Box 
-                key={message.id}
-                bg={message.direction === 'SENT' ? 'blue.100' : 'gray.100'}
+            {conversation.messages.map((message) => {
+              const isInbound = message.type === 'INBOUND';
+              if (!isInbound) return null;
+              const authorId = message.author && message.author.id !== undefined
+                ? message.author.id
+                : message.author;
+              const isMine = authorId === currentUser.id;
+              return (
+                <Box
+                  key={message.id}
+                  bg={isMine ? 'blue.100' : 'gray.100'}
+                  p={3}
+                  borderRadius="md"
+                  alignSelf={isMine ? 'flex-end' : 'flex-start'}
+                  maxWidth="70%"
+                >
+                  <Text>{message.content}</Text>
+                  <Flex align="center" justify="space-between">
+                    <Text fontSize="xs" color="gray.500">
+                      {new Date(message.timestamp).toLocaleString()}
+                    </Text>
+                    {messageStatuses[message.id] === 'pending' && (
+                      <Badge colorScheme="yellow">Enviando...</Badge>
+                    )}
+                  </Flex>
+                </Box>
+              );
+            })}
+            {pendingMessages.map((msg) => (
+              <Box
+                key={msg.id}
+                bg="blue.50"
                 p={3}
                 borderRadius="md"
-                alignSelf={message.direction === 'SENT' ? 'flex-end' : 'flex-start'}
+                alignSelf="flex-end"
                 maxWidth="70%"
+                borderStyle="dashed"
+                borderWidth="1px"
               >
-                <Text>{message.content}</Text>
-                <Text fontSize="xs" color="gray.500" textAlign="right">
-                  {new Date(message.timestamp).toLocaleString()}
-                </Text>
+                <Text>{msg.content}</Text>
+                <Flex align="center" justify="space-between">
+                  <Text fontSize="xs" color="gray.500">
+                    {new Date(msg.timestamp).toLocaleString()}
+                  </Text>
+                  <Badge colorScheme="yellow">Enviando...</Badge>
+                </Flex>
               </Box>
             ))}
           </VStack>
