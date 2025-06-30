@@ -1,81 +1,74 @@
 # RealMate Webchat Challenge
 
-Este repositório contém o backend Django + Celery e o frontend Next.js para o desafio RealMate Webchat.
+Bem-vindo ao desafio RealMate Webchat! Este repositório reúne o backend em Django + Celery e o frontend em Next.js para implementar um sistema de webchat em tempo real.
 
-## Pré-requisitos
+## 📋 Visão Geral
+
+O objetivo deste projeto é permitir a troca de mensagens entre usuários e um agente (bot) de forma síncrona e assíncrona, utilizando WebSockets e processamento assíncrono de tarefas. A arquitetura principal envolve:
+
+- **Django** para construir a API REST e gerenciamento de autenticação.
+- **Django Channels** para comunicação em tempo real via WebSockets.
+- **Celery** para processamento assíncrono (envio de mensagens, tarefas periódicas, etc.).
+- **Next.js** para o frontend React, com renderização híbrida (SSR & SSG).
+- **PostgreSQL** como banco de dados relacional.
+- **Redis** como broker e backend de resultados do Celery.
+
+## 🚀 Tecnologias
+
+- Python 3.13
+- Django, Django Channels, Celery
+- Node.js 16+, Next.js, React
+- PostgreSQL
+- Redis
+- Docker & Docker Compose
+
+## 🛠 Pré-requisitos
 
 - Docker >= 20.10
 - Docker Compose v2
+- (Opcional) Python >= 3.13 e Poetry
+- (Opcional) Node.js >= 16
 
-## Configuração
+## ⚙️ Configuração de Ambiente
 
 1. Copie o arquivo de variáveis de ambiente:
    ```bash
-   cp env.example .env
+   cp docs/env.example .env
    ```
-2. Ajuste `.env` apenas se necessário (os valores padrão já funcionam com Docker Compose).
+2. Ajuste as variáveis em `.env` caso necessário:
+   ```dotenv
+   POSTGRES_DB=postgres
+   POSTGRES_USER=postgres
+   POSTGRES_PASSWORD=postgres
+   POSTGRES_HOST=db
+   POSTGRES_PORT=5432
+   REDIS_URL=redis://redis:6379/0
+   CELERY_BROKER_URL=redis://redis:6379/0
+   CELERY_RESULT_BACKEND=redis://redis:6379/0
+   ```
 
-## Deploy Rápido
+## 💿 Deploy
 
-Execute em um único comando:
-```bash
-# Build e sobe todos os serviços (backend, frontend, DB, Redis, Celery)
-docker compose up -d --build
-```
+Para efetuar o deploy tanto manualmente quanto de forma automatizada (com docker), consulte o arquivo 'docs/INSTRUCTIONS.md'
 
-Acesse:
 
-- Backend: http://localhost:8000
-- Frontend: http://localhost:3000
-
-Para parar e remover containers:
-```bash
-docker compose down
-```
-
-## Desenvolvimento Manual
-
-Caso queira executar sem Docker:
-
-### Backend
-
-```bash
-cp env.example .env
-set -o allexport && source .env && set +o allexport
-poetry install
-poetry run python manage.py migrate
-poetry run python manage.py runserver
-```
-
-Em outra aba:
-
-```bash
-poetry run celery -A realmate_challenge worker --loglevel=info
-```
-
-### Frontend
-
-```bash
-cd realmate_challenge/frontend
-npm install
-npm run dev
-```
-
-## Estrutura do Projeto
+## 📂 Estrutura do Projeto
 
 ```
-.
+realmate-webchat-challenge/
 ├── docker-compose.yml
 ├── dockerfile
-├── env.example
-├── realmate_challenge/
-│   ├── frontend/        # Next.js
-│   ├── asgi.py
-│   ├── celery.py
+├── docs/                  # Documentação e exemplos de environment
+├── realmate_challenge/    # Backend Django + Channels + Celery
+│   ├── frontend/          # Frontend Next.js
 │   └── ...
-└── webhook_api/
+└── webhook_api/           # Módulo de Webhooks e processamento de eventos
 ```
 
-## Licença
+## 🏗 Arquitetura
 
-MIT  
+<img src="docs/architecture.svg" alt="Arquitetura do Projeto" style="max-width:50%;" />
+
+## 📄 Licença
+
+Este projeto está licenciado sob a Licença MIT. Consulte o arquivo `LICENSE` para mais detalhes.

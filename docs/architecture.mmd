@@ -1,0 +1,24 @@
+graph LR
+  subgraph "Cliente"
+    Browser["Navegador Web"]
+  end
+
+  subgraph "Docker Compose"
+    direction LR
+    db[(PostgreSQL<br/>db)]
+    redis[(Redis<br/>redis)]
+    web["Django ASGI App<br/>(web)"]
+    celery["Celery Worker<br/>(celery)"]
+    frontend["Next.js Frontend<br/>(frontend)"]
+  end
+
+  Browser -->|HTTP:3000| frontend
+  Browser -->|WS:3000| frontend
+  frontend -->|HTTP:8000| web
+  frontend -->|WS:8000| web
+
+  web -->|Read/Write| db
+  celery -->|Read/Write| db
+
+  web -.->|Broker| redis
+  celery -.->|Broker| redis
